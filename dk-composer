@@ -1,0 +1,144 @@
+#!/bin/bash
+
+# --- Configuration Variables ---
+PHP_VERSION=""
+COMPOSER_COMMAND=""
+IMAGE_NAME=""
+
+# Get the directory where the script itself is located
+# This is crucial for finding the Dockerfile when the script is run from elsewhere
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+# Default project directory for mounting volumes will be the current working directory
+# from where the user executes the script.
+PROJECT_DIR="$(pwd)" 
+
+# --- Option Flags ---
+FORCE_BUILD=false
+NO_BUILD=false
+
+# --- Functions ---
+
+# Function to display usage information
+function display_help {
+    echo "Usage: $(basename "$0") [OPTIONS] <php_version> <composer_command>"
+    echo ""
+    echo "Runs a Composer command inside a Docker container with a specific PHP version."
+    echo "The Docker image is built or checked in the folder where the script resides."
+    echo ""
+    echo "Options:"
+    echo "  --force-build    Force rebuild of the Docker image, even if it already exists."
+    echo "  --no-build       Do not build the Docker image; only use it if it exists."
+    echo "  --help           Show this help and exit."
+    echo ""
+    echo "Required arguments:"
+    echo "  <php_version>    The PHP version to use for the image (e.g., 8.1, 8.2, 8.3)."
+    echo "  <composer_command> The full Composer command to execute (e.g., install, update --no-dev)."
+    echo ""
+    echo "Examples:"
+    echo "  # Run from any directory, the Dockerfile is looked for in the script's location"
+    echo "  /path/to/your/script/dk-composer.sh 8.2 install"
+    echo "  ./dk-composer.sh --force-build 8.1 update --no-dev"
+    echo "  $(basename "$0") --no-build 7.4 require foo/bar"
+}
+
+# Function to check if a Docker image exists
+function image_exists {
+    docker image inspect "$IMAGE_NAME:latest" > /dev/null 2>&1
+    return $? # Returns 0 if exists, 1 if not
+}
+
+# Function to build the Docker image
+function build_image {
+    echo "Building Docker image $IMAGE_NAME from '$SCRIPT_DIR' ભા..."
+    # Use SCRIPT_DIR as the build context, so Docker finds the Dockerfile there
+    docker build --build-arg PHP_VERSION="$PHP_VERSION" -t "$IMAGE_NAME:latest" "$SCRIPT_DIR"
+    if [ $? -ne 0 ]; then
+        echo "Error: Docker image build failed for '$IMAGE_NAME'." >&2
+        exit 1
+    fi
+}
+
+# --- Main Script Logic ---
+
+# Parse Command Line Options
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        --force-build)
+            FORCE_BUILD=true
+            shift # Consume the option
+            ;;
+        --no-build)
+            NO_BUILD=true
+            shift # Consume the option
+            ;;
+        -h|--help)
+            display_help
+            exit 0
+            ;;
+        --) # End of all options, treat subsequent arguments as positional
+            shift
+            break
+            ;;
+        *)
+            # If PHP_VERSION is not set, set it. Otherwise, accumulate for COMPOSER_COMMAND
+            if [ -z "$PHP_VERSION" ]; then
+                PHP_VERSION="$1"
+            else
+                # Accumulate all remaining arguments as part of the Composer command
+                # This ensures multi-word Composer commands (like 'install --prefer-dist') are handled
+                COMPOSER_COMMAND="$COMPOSER_COMMAND${COMPOSER_COMMAND:+\ }$1"
+            fi
+            shift # Consume the positional argument
+            ;;
+    esac
+done
+
+# --- Validate Required Arguments ---
+if [ -z "$PHP_VERSION" ] || [ -z "$COMPOSER_COMMAND" ]; then
+    echo "Error: <php_version> and <composer_command> are required arguments." >&2
+    display_help
+    exit 1
+fi
+
+# Set the image name based on PHP_VERSION
+IMAGE_NAME="dk-composer-${PHP_VERSION}"
+
+# --- Image Build/Check Logic ---
+if $FORCE_BUILD; then
+    echo "Option --force-build detected. Rebuilding image '$IMAGE_NAME:latest'..."
+    build_image
+elif ! image_exists; then
+    if $NO_BUILD; then
+        echo "Error: Docker image '$IMAGE_NAME:latest' does not exist and --no-build option is active." >&2
+        echo "Please build the image manually or remove --no-build." >&2
+        exit 1
+    else
+        echo "Docker image '$IMAGE_NAME:latest' does not exist. Building it..."
+        build_image
+    fi
+else # Image exists and not forced to build
+    if $NO_BUILD; then
+        echo "Option --no-build detected. Using existing image '$IMAGE_NAME:latest'."
+    else
+        echo "Docker image '$IMAGE_NAME:latest' already exists. Skipping build. Use --force-build to force a rebuild."
+    fi
+fi
+
+# --- Run Composer Command ---
+echo "Running 'composer $COMPOSER_COMMAND' in container '$IMAGE_NAME:latest' with PHP $PHP_VERSION..."
+echo "Mounting current directory: '$PROJECT_DIR' in /app"
+
+docker run --rm \
+    -v "$PROJECT_DIR:/app" \
+    -u "$(id -u):$(id -g)" \
+    -w /app \
+    "$IMAGE_NAME:latest" $COMPOSER_COMMAND
+
+# Check the exit code of the docker run command
+DOCKER_EXIT_CODE=$?
+if [ $DOCKER_EXIT_CODE -ne 0 ]; then
+    echo "Composer command finished with error code: $DOCKER_EXIT_CODE" >&2
+fi
+exit $DOCKER_EXIT_CODE
+

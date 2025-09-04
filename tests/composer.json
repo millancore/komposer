@@ -1,0 +1,8 @@
+{
+    "name": "dk-composer/test-project",
+    "description": "A test project for dk-composer.",
+    "require": {
+        "monolog/monolog": "^2.0"
+    },
+    "license": "MIT"
+}
