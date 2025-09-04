@@ -86,13 +86,13 @@ function assert_output_contains {
 
 # --- Test Case Definitions ---
 
-DK_COMPOSER_SCRIPT="./dk-composer"
+DK_COMPOSER_SCRIPT="./komposer"
 TEST_DIR="./tests"
 
 function test_help_message {
     run "$DK_COMPOSER_SCRIPT" --help
     assert_success
-    assert_output_contains "Usage: dk-composer [OPTIONS] <php_version> <composer_command>"
+    assert_output_contains "Usage: komposer [OPTIONS] <php_version> <composer_command>"
 }
 
 function test_missing_arguments {
@@ -133,7 +133,7 @@ function test_composer_install {
 # --- Main Test Execution ---
 
 if [ ! -x "$DK_COMPOSER_SCRIPT" ]; then
-    echo "Making dk-composer script executable..."
+    echo "Making komposer script executable..."
     chmod +x "$DK_COMPOSER_SCRIPT"
 fi
 

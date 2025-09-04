@@ -1,33 +1,12 @@
 ARG PHP_VERSION
 
-FROM php:${PHP_VERSION}-cli
+FROM php:${PHP_VERSION}-cli-alpine
 
-# For older PHP versions, switch to the Debian archive repositories.
-RUN if [ "$(php -r 'echo PHP_MAJOR_VERSION;')" -lt 8 ]; then \
-    echo "deb http://archive.debian.org/debian/ buster main contrib non-free" > /etc/apt/sources.list && \
-    echo "deb http://archive.debian.org/debian-security buster/updates main contrib non-free" >> /etc/apt/sources.list && \
-    echo "deb http://archive.debian.org/debian/ buster-updates main contrib non-free" >> /etc/apt/sources.list; \
-    apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    unzip \
-    libxml2-dev \
-    zlib1g-dev \
-    libpng-dev \
-    libzip-dev \
-    debian-archive-keyring; \
-    else \
-    apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    unzip \
-    libxml2-dev \
-    zlib1g-dev \
-    libpng-dev \
-    libzip-dev; \
-    fi
+# Install git and dependencies
+RUN apk add --no-cache     git     unzip     libxml2-dev     zlib-dev     libpng-dev     libzip-dev
 
 # Install PHP extensions
-RUN docker-php-ext-configure pcntl --enable-pcntl \
-  && docker-php-ext-install pcntl soap gd zip exif
+RUN docker-php-ext-configure pcntl --enable-pcntl   && docker-php-ext-install pcntl soap gd zip exif
 
 
 # Install Composer

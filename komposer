@@ -37,8 +37,8 @@ function display_help {
     echo ""
     echo "Examples:"
     echo "  # Run from any directory, the Dockerfile is looked for in the script's location"
-    echo "  /path/to/your/script/dk-composer.sh 8.2 install"
-    echo "  ./dk-composer.sh --force-build 8.1 update --no-dev"
+    echo "  /path/to/your/script/komposer.sh 8.2 install"
+    echo "  ./komposer.sh --force-build 8.1 update --no-dev"
     echo "  $(basename "$0") --no-build 7.4 require foo/bar"
 }
 
@@ -50,9 +50,17 @@ function image_exists {
 
 # Function to build the Docker image
 function build_image {
-    echo "Building Docker image $IMAGE_NAME from '$SCRIPT_DIR' ભા..."
+    local dockerfile_to_use="$SCRIPT_DIR/Dockerfile"
+    local specific_dockerfile="$SCRIPT_DIR/Dockerfile.php$PHP_VERSION"
+
+    if [ -f "$specific_dockerfile" ]; then
+        echo "Found specific Dockerfile: '$specific_dockerfile'. Using it."
+        dockerfile_to_use="$specific_dockerfile"
+    fi
+
+    echo "Building Docker image $IMAGE_NAME from '$SCRIPT_DIR'..."
     # Use SCRIPT_DIR as the build context, so Docker finds the Dockerfile there
-    docker build --build-arg PHP_VERSION="$PHP_VERSION" -t "$IMAGE_NAME:latest" "$SCRIPT_DIR"
+    docker build --build-arg PHP_VERSION="$PHP_VERSION" -t "$IMAGE_NAME:latest" -f "$dockerfile_to_use" "$SCRIPT_DIR"
     if [ $? -ne 0 ]; then
         echo "Error: Docker image build failed for '$IMAGE_NAME'." >&2
         exit 1
@@ -102,7 +110,7 @@ if [ -z "$PHP_VERSION" ] || [ -z "$COMPOSER_COMMAND" ]; then
 fi
 
 # Set the image name based on PHP_VERSION
-IMAGE_NAME="dk-composer-${PHP_VERSION}"
+IMAGE_NAME="komposer-${PHP_VERSION}"
 
 # --- Image Build/Check Logic ---
 if $FORCE_BUILD; then
